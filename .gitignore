@@ -1,0 +1,73 @@
+# =============================================================
+#  DADOS — nada daqui pode ir para o GitHub
+#  (empresas, receitas, hóspedes, reservas, dumps do banco)
+# =============================================================
+
+# Pastas de dados geradas/usadas pelo gerenciador
+bases_por_dia/
+resultados_por_dia/
+backups/
+
+# JSONs (bases, resultados e conversões do ods_para_json.py)
+*.json
+
+# Planilhas de entrada e exportações
+*.ods
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+
+# Dumps e scripts SQL com valores reais do banco
+*.sql
+*.sql.gz
+*.dump
+
+# Backups baixados pela tela (backup_planilhas_*.zip) e outros pacotes
+*.zip
+*.gz
+*.tar
+*.7z
+*.bak
+
+# Temporários do gravar_json e travas do LibreOffice/Excel
+*.tmp
+.~lock.*#
+~$*
+
+# =============================================================
+#  CREDENCIAIS — caso alguma seja criada no futuro
+# =============================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+.my.cnf
+.pgpass
+
+# =============================================================
+#  PYTHON
+# =============================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# =============================================================
+#  EDITOR / SISTEMA
+# =============================================================
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+Thumbs.db
+*.log

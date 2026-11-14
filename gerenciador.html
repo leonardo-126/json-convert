@@ -1,0 +1,1516 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerenciador de Planilhas</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  color-scheme: light dark;
+  --fundo: #f4f5f3; --painel: #ffffff; --linha: #dfe2dc; --linha-forte: #c5c9c1;
+  --texto: #1d211c; --suave: #646b61; --destaque: #17694a; --destaque-fundo: #e2f1ea;
+  --sobre-destaque: #ffffff; --alerta: #b3361f; --alerta-fundo: #fbe9e4; --cabecalho: #eceee9;
+  --hover: #f4f6f2;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #141714; --painel: #1c201c; --linha: #2e332e; --linha-forte: #434943;
+    --texto: #e8ebe6; --suave: #9aa297; --destaque: #5ac79a; --destaque-fundo: #1d3a2d;
+    --sobre-destaque: #0e1f17; --alerta: #f08a72; --alerta-fundo: #40201a; --cabecalho: #232723;
+    --hover: #242924;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--fundo); color: var(--texto);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+button, select, input { font: inherit; color: inherit; }
+button, select {
+  background: var(--painel); border: 1px solid var(--linha-forte); border-radius: 6px;
+  padding: 6px 11px; cursor: pointer; min-height: 34px;
+}
+button:hover:not(:disabled) { background: var(--hover); }
+button:disabled { opacity: .5; cursor: default; }
+button.primario { background: var(--destaque); border-color: var(--destaque); color: var(--sobre-destaque); font-weight: 600; }
+button.primario:hover:not(:disabled) { background: var(--destaque); filter: brightness(1.1); }
+:focus-visible { outline: 2px solid var(--destaque); outline-offset: 1px; }
+
+.barra { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; background: var(--painel); border-bottom: 1px solid var(--linha); }
+.barra select.arquivo { max-width: 280px; }
+.espaco { flex: 1; }
+#estado { color: var(--suave); font-size: 13px; }
+#estado.pendente { color: var(--alerta); font-weight: 600; }
+
+.resumo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 32px; padding: 14px 16px 10px; }
+.rotulo { color: var(--suave); font-size: 12px; display: block; }
+#total { font-size: 34px; font-weight: 700; line-height: 1.15; color: var(--destaque); font-variant-numeric: tabular-nums; }
+.medida { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.resumo select { min-height: 28px; padding: 2px 6px; font-size: 13px; }
+
+.diaria { display: flex; flex-direction: column; gap: 4px; }
+.diaria[hidden] { display: none; }
+.diaria select[hidden] { display: none; }
+.alternar { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 28px; }
+.alternar input { width: 16px; height: 16px; accent-color: var(--destaque); }
+
+.grupos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 16px 10px; }
+.pilula { display: inline-flex; gap: 7px; align-items: baseline; border-radius: 999px; padding: 4px 12px; min-height: 30px; font-size: 13px; }
+.pilula b { font-variant-numeric: tabular-nums; }
+.pilula small { color: var(--suave); }
+.pilula.ativa { background: var(--destaque-fundo); border-color: var(--destaque); }
+.pilula.apagada { opacity: .5; }
+
+.filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 16px 10px; }
+.filtros:empty { display: none; }
+.chip { min-height: 28px; padding: 2px 10px; font-size: 13px; border-radius: 6px; background: var(--destaque-fundo); border-color: var(--destaque); }
+.chip.alerta { background: var(--alerta-fundo); border-color: var(--alerta); color: var(--alerta); }
+
+.tabela-caixa { flex: 1; min-height: 0; overflow: auto; background: var(--painel); border-top: 1px solid var(--linha); }
+table { border-collapse: separate; border-spacing: 0; width: 100%; }
+th { position: sticky; top: 0; z-index: 2; background: var(--cabecalho); text-align: left; padding: 0; border-bottom: 1px solid var(--linha-forte); border-right: 1px solid var(--linha); white-space: nowrap; }
+.th-botao { width: 100%; display: flex; justify-content: space-between; gap: 8px; align-items: center; background: none; border: 0; border-radius: 0; padding: 7px 8px; font-weight: 600; font-size: 12px; letter-spacing: .02em; }
+.th-botao .icone { color: var(--suave); font-size: 11px; }
+th.filtrado .th-botao { background: var(--destaque-fundo); }
+th.filtrado .icone { color: var(--destaque); }
+td { padding: 5px 8px; border-bottom: 1px solid var(--linha); border-right: 1px solid var(--linha); white-space: nowrap; height: 31px; cursor: cell; }
+tr:hover td { background: var(--hover); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.vazia { color: var(--suave); }
+td.problema { background: var(--alerta-fundo) !important; color: var(--alerta); font-weight: 600; }
+td.editando { padding: 0; }
+td.editando input { width: 100%; min-width: 110px; height: 30px; border: 0; padding: 0 7px; background: var(--painel); outline: 2px solid var(--destaque); outline-offset: -2px; }
+td.acao { width: 34px; padding: 0; text-align: center; cursor: default; }
+td.acao button { border: 0; background: none; min-height: 28px; padding: 0 8px; color: var(--suave); opacity: 0; }
+tr:hover td.acao button, td.acao button:focus-visible { opacity: 1; }
+td.acao button:hover { color: var(--alerta); }
+@media (hover: none) { td.acao button { opacity: 1; } }
+.mensagem { padding: 48px 16px; text-align: center; color: var(--suave); }
+
+#popover { position: fixed; z-index: 10; width: 280px; background: var(--painel); border: 1px solid var(--linha-forte); border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.22); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+#popover[hidden] { display: none; }
+#popover .linha { display: flex; gap: 6px; }
+#popover .linha > * { flex: 1; min-width: 0; }
+#popover input[type=search], #popover input[type=date] { width: 100%; min-height: 32px; padding: 4px 8px; background: var(--painel); border: 1px solid var(--linha-forte); border-radius: 6px; }
+#popover .lista { max-height: 260px; overflow: auto; border: 1px solid var(--linha); border-radius: 6px; padding: 4px; }
+#popover label { display: flex; align-items: center; gap: 7px; padding: 3px 5px; border-radius: 4px; cursor: pointer; }
+#popover label:hover { background: var(--hover); }
+#popover label span:first-of-type { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#popover label small { color: var(--suave); font-variant-numeric: tabular-nums; }
+#popover .todos { font-weight: 600; border-bottom: 1px solid var(--linha); border-radius: 0; margin-bottom: 2px; }
+#popover .rotulo { margin-bottom: 2px; }
+
+#aviso { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 20; display: flex; align-items: center; gap: 12px; background: var(--texto); color: var(--fundo); padding: 9px 14px; border-radius: 8px; max-width: calc(100vw - 32px); box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+#aviso[hidden] { display: none; }
+#aviso.erro { background: var(--alerta); color: var(--sobre-destaque); }
+#aviso button { background: none; border: 1px solid currentColor; color: inherit; min-height: 26px; padding: 1px 9px; }
+#aviso button:hover { background: none; opacity: .8; }
+
+#soma { position: fixed; inset: 0; z-index: 5; overflow: auto; background: var(--fundo); padding-bottom: 32px; }
+#soma[hidden] { display: none; }
+#soma .conteudo { max-width: 1040px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+#soma h2 { font-size: 15px; margin: 0 0 8px; }
+#soma .cartao { background: var(--painel); border: 1px solid var(--linha); border-radius: 8px; padding: 14px; overflow-x: auto; }
+#soma .campos { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+#soma select { max-width: 100%; }
+#soma textarea, #soma input[type=text] { width: 100%; background: var(--painel); border: 1px solid var(--linha-forte); border-radius: 6px; padding: 6px 8px; }
+#soma textarea { min-height: 90px; margin-top: 10px; font: 12px/1.4 ui-monospace, monospace; }
+#soma td { cursor: default; }
+#soma tr.alterada td { background: var(--destaque-fundo); font-weight: 600; }
+#soma tfoot td { font-weight: 700; border-top: 1px solid var(--linha-forte); }
+#soma th { position: static; padding: 7px 8px; font-size: 12px; }
+#soma th.num { text-align: right; }
+#soma .nota { color: var(--suave); font-size: 13px; margin: 8px 0 0; }
+#soma .alerta { background: var(--alerta-fundo); color: var(--alerta); border: 1px solid var(--alerta); border-radius: 6px; padding: 8px 12px; font-weight: 600; }
+#soma .numeros { display: flex; flex-wrap: wrap; gap: 12px 32px; align-items: flex-end; }
+#soma .novo-total { font-size: 30px; font-weight: 700; color: var(--destaque); font-variant-numeric: tabular-nums; line-height: 1.15; }
+#soma .salvar-como { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#soma .salvar-como input { flex: 1 1 220px; width: auto; min-height: 34px; }
+
+a.botao { display: inline-flex; align-items: center; min-height: 34px; padding: 6px 11px; border: 1px solid var(--linha-forte); border-radius: 6px; background: var(--painel); color: inherit; text-decoration: none; }
+a.botao:hover { background: var(--hover); }
+.alternador { display: inline-flex; align-self: flex-start; border: 1px solid var(--linha-forte); border-radius: 8px; overflow: hidden; background: var(--painel); }
+.alternador button { border: 0; border-radius: 0; min-height: 36px; padding: 6px 16px; }
+.alternador button + button { border-left: 1px solid var(--linha-forte); }
+.alternador button[aria-pressed="true"] { background: var(--destaque-fundo); color: var(--destaque); font-weight: 700; }
+#soma tr.selecionada td { background: var(--destaque-fundo); }
+#soma td.falta { color: var(--alerta); font-weight: 600; }
+.link-dia { border: 0; background: none; padding: 0; min-height: 0; color: var(--destaque); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.link-dia:hover { background: none !important; }
+.historico { margin-top: 10px; padding: 10px; border: 1px dashed var(--linha-forte); border-radius: 6px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; overflow-x: auto; }
+.historico .nota { margin: 0; }
+.tabela-historico { width: auto; }
+.tabela-historico td { padding: 3px 10px; height: auto; }
+.tabela-historico button { min-height: 28px; padding: 2px 10px; }
+
+#cartao-sql summary { cursor: pointer; }
+.dias-sql { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.dias-sql label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--linha-forte); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.dias-sql label small { color: var(--suave); }
+#soma input[type=text]#sql-hotel { min-height: 34px; }
+
+@media (max-width: 640px) {
+  #total { font-size: 28px; }
+  .barra select.arquivo { flex: 1 1 100%; max-width: none; }
+  #popover { width: calc(100vw - 32px); }
+}
+</style>
+</head>
+<body>
+<header class="barra">
+  <select id="arquivo" class="arquivo" aria-label="Arquivo JSON"></select>
+  <select id="aba" aria-label="Aba" hidden></select>
+  <button id="importar">Importar .ods</button>
+  <input id="importar-arquivo" type="file" accept=".ods" hidden>
+  <button id="abrir-soma">Somar à base</button>
+  <span class="espaco"></span>
+  <span id="estado" role="status"></span>
+  <button id="nova-linha">+ Nova linha</button>
+  <button id="salvar" class="primario" disabled title="Ctrl+S">Salvar</button>
+</header>
+
+<section class="resumo" aria-live="polite">
+  <div>
+    <label class="rotulo" for="coluna-soma" id="total-rotulo">Total filtrado</label>
+    <div id="total">–</div>
+  </div>
+  <div><span class="rotulo" id="linhas-rotulo">Linhas</span><span class="medida" id="linhas">–</span></div>
+  <div><span class="rotulo">Total geral</span><span class="medida" id="total-geral">–</span></div>
+  <div>
+    <label class="rotulo" for="coluna-soma">Somar a coluna</label>
+    <select id="coluna-soma"></select>
+  </div>
+  <div id="caixa-diaria" class="diaria" hidden>
+    <label class="alternar"><input type="checkbox" id="por-diaria"> Dividir receita por diária (IN → OUT)</label>
+    <select id="periodo" aria-label="Período" hidden></select>
+  </div>
+</section>
+<div class="grupos" id="grupos"></div>
+<div class="filtros" id="filtros"></div>
+<div class="tabela-caixa" id="tabela-caixa"></div>
+
+<section id="soma" hidden>
+  <header class="barra">
+    <button id="fechar-soma">← Voltar</button>
+    <strong>Somar à base</strong>
+    <span class="espaco"></span>
+    <a class="botao" id="baixar-backup" href="/api/backup.zip" title="Baixa um .zip com todos os JSONs, bases por dia, resultados e o histórico">Baixar backup (.zip)</a>
+  </header>
+  <div class="conteudo" id="soma-conteudo"></div>
+</section>
+
+<div id="popover" hidden></div>
+<div id="aviso" role="alert" hidden></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const VAZIO = "\u0000vazio";
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const numeroBR = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 10, useGrouping: false });
+
+const estado = {
+  arquivo: null, versao: null, abas: {}, multiplasAbas: false, aba: null, pendente: false,
+  colunas: [], tipos: {}, filtros: {}, ordem: null, colunaSoma: null, colunaGrupo: null,
+  soProblemas: false, popoverColuna: null, popoverBusca: "",
+};
+
+/* ---------- utilidades ---------- */
+function el(tag, props = {}, ...filhos) {
+  const no = Object.assign(document.createElement(tag), props);
+  no.append(...filhos);
+  return no;
+}
+function chave(valor) { return valor === null || valor === undefined || valor === "" ? VAZIO : String(valor); }
+function linhasBase() { return estado.abas[estado.aba] || []; }
+// No modo diária, a tabela mostra uma linha por noite; os dados do arquivo continuam em linhasBase().
+function linhasDaAba() {
+  if (!modoDiaria()) return linhasBase();
+  return estado.cacheDiarias ||= expandirDiarias(linhasBase());
+}
+function rotuloColuna(coluna) {
+  if (coluna === "dia") return "DIA";
+  if (coluna === "diaria") return "DIÁRIA";
+  return coluna.replace(/_r$/i, "_R$").replace(/_/g, " ").toUpperCase();
+}
+function formatarValor(valor, coluna) {
+  if (valor === null || valor === undefined || valor === "") return "";
+  if (typeof valor === "number") return coluna === estado.colunaSoma ? moeda.format(valor) : numeroBR.format(valor);
+  if (typeof valor === "boolean") return valor ? "Sim" : "Não";
+  if (estado.tipos[coluna] === "data") return valor.split("-").reverse().join("/");
+  return String(valor);
+}
+function rotuloChave(k, coluna) {
+  if (k === VAZIO) return "(Vazias)";
+  return estado.tipos[coluna] === "numero" ? formatarValor(Number(k), coluna) : formatarValor(k, coluna);
+}
+function comparar(a, b) {
+  const av = a === null || a === undefined || a === "", bv = b === null || b === undefined || b === "";
+  if (av || bv) return av === bv ? 0 : av ? 1 : -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), "pt-BR", { numeric: true });
+}
+function somar(linhas, coluna) {
+  if (!coluna) return 0;
+  // Soma em centavos para o total não acumular erro de ponto flutuante.
+  return linhas.reduce((t, l) => t + (typeof l[coluna] === "number" ? Math.round(l[coluna] * 100) : 0), 0) / 100;
+}
+let temporizadorAviso;
+function avisar(texto, { erro = false, acao = null, rotuloAcao = "" } = {}) {
+  const aviso = $("aviso");
+  clearTimeout(temporizadorAviso);
+  aviso.className = erro ? "erro" : "";
+  aviso.replaceChildren(el("span", { textContent: texto }));
+  if (acao) aviso.append(el("button", { textContent: rotuloAcao, onclick() { aviso.hidden = true; acao(); } }));
+  aviso.hidden = false;
+  temporizadorAviso = setTimeout(() => { aviso.hidden = true; }, acao ? 8000 : erro ? 7000 : 3000);
+}
+async function api(url, opcoes) {
+  const resposta = await fetch(url, opcoes);
+  const corpo = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw Object.assign(new Error(corpo.erro || `Erro ${resposta.status}`), { status: resposta.status });
+  return corpo;
+}
+
+/* ---------- colunas e problemas ---------- */
+/* ---------- receita por diária ---------- */
+const DIA_MS = 86400000;
+function podeDividir() { return !!(estado.colEntrada && estado.colSaida && estado.colunaSoma); }
+function modoDiaria() { return estado.porDiaria && podeDividir(); }
+function diaUTC(iso) {
+  if (typeof iso !== "string" || !DATA_ISO.test(iso)) return null;
+  const [a, m, d] = iso.split("-").map(Number);
+  const t = Date.UTC(a, m - 1, d);
+  return new Date(t).getUTCDate() === d ? t : null;
+}
+const isoDeUTC = t => new Date(t).toISOString().slice(0, 10);
+/* Cada noite de IN até a véspera de OUT recebe uma parte igual da receita (IN 01, OUT 03 → dias 01 e 02).
+   A divisão é feita em centavos e a sobra vai para as primeiras noites, então a soma bate com o valor original.
+   Day use (OUT = IN) ou OUT inválida: a receita inteira fica no dia do IN. */
+function expandirDiarias(linhas) {
+  const { colEntrada, colSaida, colunaSoma } = estado, saida = [];
+  for (const linha of linhas) {
+    const entrada = diaUTC(linha[colEntrada]), fim = diaUTC(linha[colSaida]);
+    if (entrada === null) {
+      saida.push({ dia: null, diaria: "sem data de entrada", ...linha });
+      continue;
+    }
+    let noites = fim === null ? 0 : Math.round((fim - entrada) / DIA_MS), obs = "";
+    if (noites === 0 && fim !== null) { noites = 1; obs = " (day use)"; }
+    else if (noites < 1 || noites > 366) { noites = 1; obs = " (saída inválida)"; }
+    const valor = linha[colunaSoma];
+    const centavos = typeof valor === "number" ? Math.round(valor * 100) : null;
+    const parte = centavos === null ? 0 : Math.trunc(centavos / noites);
+    const sobra = centavos === null ? 0 : centavos - parte * noites;
+    for (let i = 0; i < noites; i++) {
+      const noite = { dia: isoDeUTC(entrada + i * DIA_MS), diaria: `${i + 1} de ${noites}${obs}`, ...linha };
+      if (centavos !== null) noite[colunaSoma] = (parte + (i < Math.abs(sobra) ? Math.sign(sobra) : 0)) / 100;
+      saida.push(noite);
+    }
+  }
+  return saida;
+}
+function mesesDasDiarias() {
+  return [...new Set(linhasDaAba().map(l => l.dia).filter(Boolean).map(d => d.slice(0, 7)))].sort();
+}
+function intervaloDoMes(mes) {
+  const [a, m] = mes.split("-").map(Number);
+  return { de: `${mes}-01`, ate: isoDeUTC(Date.UTC(a, m, 0)) };
+}
+const nomeMes = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+function rotuloMes(mes) { const t = nomeMes.format(diaUTC(`${mes}-01`)); return t[0].toUpperCase() + t.slice(1); }
+function mesSelecionado() {
+  const f = estado.filtros.dia;
+  if (!filtroAtivo(f)) return "";
+  const mes = (f.de || "").slice(0, 7);
+  const exato = mes && !f.excluidos.size && f.de === `${mes}-01` && f.ate === intervaloDoMes(mes).ate;
+  return exato ? mes : "personalizado";
+}
+function descreverOrigem(usadas, todas) {
+  if (!modoDiaria()) return `${usadas} de ${todas} linhas de “${estado.arquivo}”, coluna ${rotuloColuna(estado.colunaSoma)}`;
+  const mes = mesSelecionado();
+  const periodo = mes === "" ? "todos os dias" : mes === "personalizado" ? "filtro de dias personalizado" : rotuloMes(mes).toLowerCase();
+  return `${usadas} de ${todas} diárias de “${estado.arquivo}” (receita dividida entre IN e OUT, ${periodo}), coluna ${rotuloColuna(estado.colunaSoma)}`;
+}
+
+function analisarColunas() {
+  const linhas = linhasBase(), colunas = [], tipos = {};
+  for (const linha of linhas) for (const c of Object.keys(linha)) if (!colunas.includes(c)) colunas.push(c);
+  for (const c of colunas) {
+    const valores = linhas.map(l => l[c]).filter(v => v !== null && v !== undefined && v !== "");
+    if (valores.length && valores.every(v => typeof v === "number")) tipos[c] = "numero";
+    else if (valores.length && valores.every(v => typeof v === "string" && DATA_ISO.test(v))) tipos[c] = "data";
+    else tipos[c] = "texto";
+  }
+  estado.colunas = colunas;
+  estado.tipos = tipos;
+
+  const numericas = colunas.filter(c => tipos[c] === "numero");
+  if (!numericas.includes(estado.colunaSoma)) {
+    const temDecimal = c => linhas.some(l => typeof l[c] === "number" && !Number.isInteger(l[c]));
+    estado.colunaSoma = numericas.find(c => /valor|total|pre[cç]o/i.test(c)) || numericas.find(temDecimal) || null;
+  }
+  const textos = colunas.filter(c => {
+    if (tipos[c] !== "texto") return false;
+    const distintos = new Set(linhas.map(l => chave(l[c]))).size;
+    return distintos > 1 && distintos <= 12;
+  });
+  if (!textos.includes(estado.colunaGrupo) && !(estado.colunaGrupo === "dia" && estado.porDiaria)) {
+    estado.colunaGrupo = textos[0] || null;
+  }
+
+  const datas = colunas.filter(c => tipos[c] === "data");
+  estado.colEntrada = datas.find(c => /^(in|check_?in|entrada|chegada)$/i.test(c)) || null;
+  estado.colSaida = datas.find(c => /^(out|check_?out|saida|partida)$/i.test(c)) || null;
+  estado.cacheDiarias = null;
+  if (modoDiaria()) {
+    estado.colunas = ["dia", "diaria", ...colunas];
+    estado.tipos = { ...tipos, dia: "data", diaria: "texto" };
+  }
+}
+function alternarDiaria(ligar) {
+  estado.porDiaria = ligar;
+  if (!ligar) {
+    delete estado.filtros.dia;
+    delete estado.filtros.diaria;
+    if (estado.ordem && ["dia", "diaria"].includes(estado.ordem.coluna)) estado.ordem = null;
+    if (estado.colunaGrupo === "dia") estado.colunaGrupo = null;
+  }
+  fecharPopover();
+  analisarColunas();
+  desenhar();
+}
+function problemasDaLinha(linha) {
+  const problemas = {};
+  for (const c of estado.colunas) {
+    if (estado.tipos[c] === "data" && typeof linha[c] === "string" && linha[c].slice(0, 4) < "2000") {
+      problemas[c] = "Data suspeita: ano anterior a 2000";
+    }
+  }
+  if (typeof linha.in === "string" && typeof linha.out === "string" && linha.out < linha.in && !problemas.out) {
+    problemas.out = "A saída é anterior à entrada";
+  }
+  return problemas;
+}
+
+/* ---------- filtros ---------- */
+function filtroAtivo(f) { return !!f && (f.excluidos.size > 0 || !!f.de || !!f.ate); }
+function passaFiltro(linha, coluna) {
+  const f = estado.filtros[coluna];
+  if (!filtroAtivo(f)) return true;
+  const k = chave(linha[coluna]);
+  if (f.excluidos.has(k)) return false;
+  if (f.de && (k === VAZIO || k < f.de)) return false;
+  if (f.ate && (k === VAZIO || k > f.ate)) return false;
+  return true;
+}
+// Como no Excel: cada coluna considera os filtros de todas as outras.
+function linhasFiltradas(ignorarColuna = null) {
+  return linhasDaAba().filter(l =>
+    estado.colunas.every(c => c === ignorarColuna || passaFiltro(l, c)) &&
+    (!estado.soProblemas || Object.keys(problemasDaLinha(l)).length > 0));
+}
+function obterFiltro(coluna) {
+  return estado.filtros[coluna] ||= { excluidos: new Set(), de: "", ate: "" };
+}
+function limparFiltros() {
+  estado.filtros = {};
+  estado.soProblemas = false;
+  fecharPopover();
+  desenhar();
+}
+
+/* ---------- desenho ---------- */
+function desenhar() {
+  desenharResumo();
+  desenharGrupos();
+  desenharChips();
+  desenharTabela();
+}
+function desenharResumo() {
+  const filtradas = linhasFiltradas(), todas = linhasDaAba(), c = estado.colunaSoma;
+  const ha = estado.colunas.length > 0;
+  $("total").textContent = c ? moeda.format(somar(filtradas, c)) : "–";
+  $("total-geral").textContent = c ? moeda.format(somar(todas, c)) : "–";
+  $("linhas").textContent = ha ? `${filtradas.length} de ${todas.length}` : "–";
+  $("linhas-rotulo").textContent = modoDiaria() ? "Diárias" : "Linhas";
+  $("caixa-diaria").hidden = !podeDividir();
+  $("por-diaria").checked = modoDiaria();
+  const periodo = $("periodo"), mes = mesSelecionado();
+  periodo.hidden = !modoDiaria();
+  if (modoDiaria()) {
+    periodo.replaceChildren(
+      el("option", { value: "", textContent: "Todos os dias" }),
+      ...mesesDasDiarias().map(m => el("option", { value: m, textContent: rotuloMes(m) })),
+      ...(mes === "personalizado" ? [el("option", { value: "personalizado", textContent: "Filtro personalizado" })] : []));
+    periodo.value = mes;
+  }
+
+  const seletor = $("coluna-soma");
+  const numericas = estado.colunas.filter(n => estado.tipos[n] === "numero");
+  seletor.replaceChildren(...numericas.map(n => el("option", { value: n, textContent: rotuloColuna(n) })));
+  seletor.disabled = numericas.length === 0;
+  if (c) seletor.value = c;
+  $("nova-linha").disabled = !ha || modoDiaria();
+  $("abrir-soma").disabled = !c || !estado.colunaGrupo;
+  $("salvar").disabled = !estado.pendente;
+  const est = $("estado");
+  est.textContent = estado.pendente ? "Alterações não salvas" : estado.arquivo ? "Tudo salvo" : "";
+  est.className = estado.pendente ? "pendente" : "";
+}
+function desenharGrupos() {
+  const caixa = $("grupos"), coluna = estado.colunaGrupo;
+  caixa.replaceChildren();
+  const candidatas = estado.colunas.filter(c => estado.tipos[c] === "texto" && (() => {
+    const n = new Set(linhasDaAba().map(l => chave(l[c]))).size;
+    return n > 1 && n <= 12;
+  })());
+  if (modoDiaria()) candidatas.push("dia");
+  if (!coluna || !estado.colunaSoma) return;
+
+  const seletor = el("select", {
+    ariaLabel: "Agrupar por", onchange(e) { estado.colunaGrupo = e.target.value; desenharGrupos(); },
+  }, ...candidatas.map(c => el("option", { value: c, textContent: `Por ${rotuloColuna(c)}` })));
+  seletor.value = coluna;
+  caixa.append(seletor);
+
+  const f = estado.filtros[coluna];
+  // Valores fora do intervalo de datas (ex.: outubro com novembro escolhido) nem aparecem.
+  const foraDoPeriodo = k => !!f && ((f.de && (k === VAZIO || k < f.de)) || (f.ate && (k === VAZIO || k > f.ate)));
+  const grupos = new Map();
+  for (const l of linhasFiltradas(coluna)) {
+    const k = chave(l[coluna]);
+    if (foraDoPeriodo(k)) continue;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(l);
+  }
+  // Dias ficam em ordem de calendário; o resto, do maior valor para o menor.
+  const ordenados = [...grupos].sort(estado.tipos[coluna] === "data"
+    ? (a, b) => comparar(a[0] === VAZIO ? null : a[0], b[0] === VAZIO ? null : b[0])
+    : (a, b) => somar(b[1], estado.colunaSoma) - somar(a[1], estado.colunaSoma));
+  for (const [k, linhas] of ordenados) {
+    const incluido = !f || !f.excluidos.has(k);
+    const unico = !!f && f.excluidos.size > 0 && incluido;
+    caixa.append(el("button", {
+      className: `pilula ${unico ? "ativa" : ""} ${incluido ? "" : "apagada"}`,
+      title: `Filtrar só ${rotuloChave(k, coluna)}`,
+      onclick() { alternarGrupo(coluna, k, [...grupos.keys()]); },
+    }, el("span", { textContent: rotuloChave(k, coluna) }),
+       el("b", { textContent: moeda.format(somar(linhas, estado.colunaSoma)) }),
+       el("small", { textContent: `${linhas.length}` })));
+  }
+}
+function alternarGrupo(coluna, k, todas) {
+  const f = obterFiltro(coluna);
+  const jaSozinho = f.excluidos.size === todas.length - 1 && !f.excluidos.has(k) && todas.length > 1;
+  f.excluidos = jaSozinho ? new Set() : new Set(todas.filter(v => v !== k));
+  desenhar();
+}
+function desenharChips() {
+  const caixa = $("filtros");
+  caixa.replaceChildren();
+  for (const c of estado.colunas) {
+    const f = estado.filtros[c];
+    if (!filtroAtivo(f)) continue;
+    const partes = [];
+    if (f.excluidos.size) {
+      const incluidos = [...new Set(linhasFiltradas(c).map(l => chave(l[c])))];
+      const nomes = incluidos.filter(k => !f.excluidos.has(k)).map(k => rotuloChave(k, c));
+      partes.push(nomes.length <= 3 ? nomes.join(", ") || "nada" : `${nomes.length} valores`);
+    }
+    if (f.de) partes.push(`de ${f.de.split("-").reverse().join("/")}`);
+    if (f.ate) partes.push(`até ${f.ate.split("-").reverse().join("/")}`);
+    caixa.append(el("button", {
+      className: "chip", title: "Remover este filtro",
+      textContent: `${rotuloColuna(c)}: ${partes.join(" ")}  ✕`,
+      onclick() { delete estado.filtros[c]; fecharPopover(); desenhar(); },
+    }));
+  }
+  const comProblema = linhasDaAba().filter(l => Object.keys(problemasDaLinha(l)).length).length;
+  if (comProblema) {
+    caixa.append(el("button", {
+      className: "chip alerta",
+      textContent: estado.soProblemas ? "Mostrando só linhas com problema  ✕" : `⚠ ${comProblema} ${comProblema === 1 ? "linha com data suspeita" : "linhas com data suspeita"}`,
+      onclick() { estado.soProblemas = !estado.soProblemas; desenhar(); },
+    }));
+  }
+  if (estado.colunas.some(c => filtroAtivo(estado.filtros[c]))) {
+    caixa.append(el("button", { className: "chip", style: "background:none", textContent: "Limpar todos os filtros", onclick: limparFiltros }));
+  }
+}
+function linhasOrdenadas() {
+  const linhas = linhasFiltradas();
+  if (!estado.ordem) return linhas;
+  const { coluna, direcao } = estado.ordem;
+  return [...linhas].sort((a, b) => {
+    const av = chave(a[coluna]) === VAZIO, bv = chave(b[coluna]) === VAZIO;
+    if (av || bv) return comparar(a[coluna], b[coluna]); // vazias sempre no fim
+    return comparar(a[coluna], b[coluna]) * direcao;
+  });
+}
+function desenharTabela() {
+  const caixa = $("tabela-caixa"), rolagem = caixa.scrollTop;
+  if (!estado.arquivo && !estado.colunas.length) {
+    caixa.replaceChildren(el("div", { className: "mensagem", textContent: "Nenhum JSON nesta pasta. Use “Importar .ods” para começar." }));
+    return;
+  }
+  if (!estado.colunas.length) {
+    caixa.replaceChildren(el("div", { className: "mensagem", textContent: "Este arquivo não tem linhas." }));
+    return;
+  }
+  const cabecalho = el("tr");
+  for (const c of estado.colunas) {
+    const ordem = estado.ordem && estado.ordem.coluna === c ? (estado.ordem.direcao > 0 ? "▲ " : "▼ ") : "";
+    cabecalho.append(el("th", { className: filtroAtivo(estado.filtros[c]) ? "filtrado" : "" },
+      el("button", {
+        className: "th-botao", title: `Filtrar ${rotuloColuna(c)}`,
+        onclick(e) { e.stopPropagation(); abrirPopover(c, e.currentTarget); },
+      }, el("span", { textContent: rotuloColuna(c) }), el("span", { className: "icone", textContent: `${ordem}▾` }))));
+  }
+  cabecalho.append(el("th", { ariaLabel: "Ações" }));
+
+  const corpo = el("tbody");
+  const linhas = linhasOrdenadas();
+  for (const linha of linhas) corpo.append(desenharLinha(linha));
+  const tabela = el("table", {}, el("thead", {}, cabecalho), corpo);
+  caixa.replaceChildren(tabela);
+  if (!linhas.length) caixa.append(el("div", { className: "mensagem", textContent: "Nenhuma linha com estes filtros." }));
+  caixa.scrollTop = rolagem;
+}
+function desenharLinha(linha) {
+  const tr = el("tr"), problemas = problemasDaLinha(linha);
+  for (const c of estado.colunas) {
+    const texto = formatarValor(linha[c], c);
+    const dica = modoDiaria() ? "Desligue “Dividir por diária” para editar" : "Clique duas vezes para editar";
+    const td = el("td", { textContent: texto, title: problemas[c] || dica });
+    if (estado.tipos[c] === "numero") td.classList.add("num");
+    if (problemas[c]) td.classList.add("problema");
+    td.ondblclick = () => modoDiaria()
+      ? avisar("Desligue “Dividir por diária” para editar as reservas.")
+      : editarCelula(td, linha, c);
+    tr.append(td);
+  }
+  tr.append(modoDiaria() ? el("td", { className: "acao" }) : el("td", { className: "acao" }, el("button", {
+    textContent: "✕", title: "Excluir linha", ariaLabel: "Excluir linha",
+    onclick() { excluirLinha(linha); },
+  })));
+  return tr;
+}
+
+/* ---------- edição ---------- */
+function marcarPendente() { estado.pendente = true; estado.cacheDiarias = null; }
+function interpretarNumero(texto) {
+  const t = texto.trim().replace(/^R\$\s*/i, "");
+  // "1.234,56" é o formato brasileiro; "1234.56" também é aceito.
+  const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  return /^-?\d+(\.\d+)?$/.test(normal) ? Number(normal) : NaN;
+}
+function editarCelula(td, linha, coluna) {
+  if (td.classList.contains("editando")) return;
+  const tipo = estado.tipos[coluna], original = linha[coluna];
+  const input = el("input", { type: tipo === "data" ? "date" : "text", ariaLabel: rotuloColuna(coluna) });
+  if (tipo === "numero") {
+    input.inputMode = "decimal";
+    input.value = original === null || original === undefined ? "" : numeroBR.format(original);
+  } else {
+    input.value = original === null || original === undefined ? "" : String(original);
+  }
+  let terminou = false;
+  const concluir = salvar => {
+    if (terminou) return;
+    terminou = true;
+    if (salvar) {
+      const texto = input.value.trim();
+      let novo = texto === "" ? null : texto;
+      if (tipo === "numero" && novo !== null) {
+        novo = interpretarNumero(texto);
+        if (Number.isNaN(novo)) { avisar(`“${texto}” não é um número válido.`, { erro: true }); desenhar(); return; }
+      }
+      if (novo !== (original ?? null)) {
+        linha[coluna] = novo;
+        marcarPendente();
+        analisarColunas();
+      }
+    }
+    desenhar();
+  };
+  input.onkeydown = e => {
+    if (e.key === "Enter") concluir(true);
+    if (e.key === "Escape") { e.stopPropagation(); concluir(false); }
+  };
+  input.onblur = () => concluir(true);
+  td.classList.add("editando");
+  td.replaceChildren(input);
+  input.focus();
+  input.select?.();
+}
+function excluirLinha(linha) {
+  const linhas = linhasBase(), indice = linhas.indexOf(linha);
+  linhas.splice(indice, 1);
+  marcarPendente();
+  analisarColunas();
+  desenhar();
+  avisar("Linha excluída.", {
+    rotuloAcao: "Desfazer",
+    acao() { linhas.splice(indice, 0, linha); analisarColunas(); desenhar(); },
+  });
+}
+function novaLinha() {
+  const linha = Object.fromEntries(estado.colunas.map(c => [c, null]));
+  linhasBase().push(linha);
+  marcarPendente();
+  // Sem filtros nem ordenação a linha nova, que ainda está em branco, fica visível no fim.
+  estado.filtros = {}; estado.soProblemas = false; estado.ordem = null;
+  desenhar();
+  const caixa = $("tabela-caixa");
+  caixa.scrollTop = caixa.scrollHeight;
+  const primeira = caixa.querySelector("tbody tr:last-child td");
+  if (primeira) editarCelula(primeira, linha, estado.colunas[0]);
+}
+
+/* ---------- popover de filtro ---------- */
+function fecharPopover() { estado.popoverColuna = null; $("popover").hidden = true; }
+function abrirPopover(coluna, ancora) {
+  if (estado.popoverColuna === coluna) { fecharPopover(); return; }
+  estado.popoverColuna = coluna;
+  estado.popoverBusca = "";
+  desenharPopover();
+  const pop = $("popover"), r = ancora.getBoundingClientRect();
+  pop.hidden = false;
+  pop.style.left = `${Math.max(16, Math.min(r.left, innerWidth - pop.offsetWidth - 16))}px`;
+  pop.style.top = `${Math.max(8, Math.min(r.bottom + 4, innerHeight - pop.offsetHeight - 8))}px`;
+  pop.querySelector("input[type=search]").focus();
+}
+function desenharPopover() {
+  const coluna = estado.popoverColuna, pop = $("popover");
+  const botaoOrdem = (texto, direcao) => el("button", {
+    textContent: texto,
+    onclick() { estado.ordem = { coluna, direcao }; fecharPopover(); desenhar(); },
+  });
+  const crescente = estado.tipos[coluna] === "numero" ? "Menor → maior" : estado.tipos[coluna] === "data" ? "Antiga → recente" : "A → Z";
+  const decrescente = estado.tipos[coluna] === "numero" ? "Maior → menor" : estado.tipos[coluna] === "data" ? "Recente → antiga" : "Z → A";
+  const lista = el("div", { className: "lista" });
+  const busca = el("input", {
+    type: "search", placeholder: "Pesquisar", value: estado.popoverBusca, ariaLabel: "Pesquisar valores",
+    oninput(e) { estado.popoverBusca = e.target.value; desenharListaFiltro(lista); },
+  });
+  const filhos = [el("div", { className: "linha" }, botaoOrdem(crescente, 1), botaoOrdem(decrescente, -1))];
+  if (estado.tipos[coluna] === "data") {
+    const f = () => obterFiltro(coluna);
+    const atual = estado.filtros[coluna];
+    const campoData = (rotulo, campo) => el("label", { style: "display:block;padding:0" },
+      el("span", { className: "rotulo", textContent: rotulo }),
+      el("input", { type: "date", value: atual?.[campo] || "", onchange(e) { f()[campo] = e.target.value; desenhar(); desenharListaFiltro(lista); } }));
+    filhos.push(el("div", { className: "linha" }, campoData("De", "de"), campoData("Até", "ate")));
+  }
+  filhos.push(busca, lista, el("button", {
+    textContent: "Limpar filtro desta coluna",
+    onclick() { delete estado.filtros[coluna]; desenharPopover(); desenhar(); },
+  }));
+  pop.replaceChildren(...filhos);
+  desenharListaFiltro(lista);
+}
+function desenharListaFiltro(lista) {
+  const coluna = estado.popoverColuna, busca = estado.popoverBusca.toLocaleLowerCase("pt-BR");
+  const f = estado.filtros[coluna];
+  // Ignora o filtro desta coluna para os valores desmarcados continuarem na lista.
+  const contagem = new Map();
+  for (const l of linhasFiltradas(coluna)) {
+    const k = chave(l[coluna]);
+    contagem.set(k, (contagem.get(k) || 0) + 1);
+  }
+  const valores = [...contagem.keys()]
+    .sort((a, b) => a === VAZIO ? 1 : b === VAZIO ? -1 : estado.tipos[coluna] === "numero" ? Number(a) - Number(b) : comparar(a, b))
+    .filter(k => rotuloChave(k, coluna).toLocaleLowerCase("pt-BR").includes(busca));
+
+  const marcados = valores.filter(k => !f?.excluidos.has(k)).length;
+  const todos = el("input", {
+    type: "checkbox", checked: marcados === valores.length && valores.length > 0,
+    indeterminate: marcados > 0 && marcados < valores.length,
+    onchange(e) {
+      const filtro = obterFiltro(coluna);
+      for (const k of valores) e.target.checked ? filtro.excluidos.delete(k) : filtro.excluidos.add(k);
+      desenhar(); desenharListaFiltro(lista);
+    },
+  });
+  const itens = valores.map(k => el("label", {},
+    el("input", {
+      type: "checkbox", checked: !f?.excluidos.has(k),
+      onchange(e) {
+        const filtro = obterFiltro(coluna);
+        e.target.checked ? filtro.excluidos.delete(k) : filtro.excluidos.add(k);
+        desenhar(); desenharListaFiltro(lista);
+      },
+    }),
+    el("span", { textContent: rotuloChave(k, coluna) }),
+    el("small", { textContent: String(contagem.get(k)) })));
+  const rolagem = lista.scrollTop;
+  lista.replaceChildren(
+    el("label", { className: "todos" }, todos, el("span", { textContent: busca ? "Selecionar resultados" : "Selecionar tudo" })),
+    ...itens);
+  lista.scrollTop = rolagem;
+}
+
+/* ---------- somar à base ---------- */
+const COLAR = "\u0000colar";
+// Valores especiais começam com \u0000 para não colidir com nomes de empresa, nem com uma empresa de nome vazio.
+const IGNORAR = "\u0000ignorar", CRIAR = "\u0000criar";
+const AREA_BASES = "bases_por_dia", AREA_RESULTADOS = "resultados_por_dia";
+const soma = {
+  modo: "unica", bases: [], baseNome: null, base: null, colado: "", erroBase: "", mapa: {}, nomeSaida: "",
+  dia: null, basesDia: {}, resultadosDia: {}, coladoDia: "", erroDia: "", trocandoBase: false, historico: null,
+  sql: { aberto: false, idHotel: lerPreferencia("idHotel"), desmarcados: new Set(), texto: "" },
+};
+
+const ehBase = dados => Array.isArray(dados) && dados.length > 0 &&
+  dados.every(b => b && typeof b.name === "string" && typeof b.value === "number");
+const normalizar = texto => String(texto).normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim();
+const formatarDia = iso => iso.split("-").reverse().join("/");
+const centavosDa = base => base.reduce((t, b) => t + Math.round(b.value * 100), 0);
+const nomeBaseDia = dia => `${AREA_BASES}/${dia}.json`;
+const nomeResultadoDia = dia => `${AREA_RESULTADOS}/${dia}.json`;
+
+function sugerirDestino(origem, base) {
+  // Reserva sem empresa na planilha é hóspede particular.
+  const nome = normalizar(origem === VAZIO ? "PARTICULAR" : origem);
+  const exata = base.find(b => normalizar(b.name) === nome);
+  if (exata) return exata.name;
+  // Palavra inteira: "VENERE" casa com "VENERE.COM". Mais de um candidato fica para a pessoa escolher.
+  const palavra = new RegExp(`(^|[^A-Z0-9])${nome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Z0-9]|$)`);
+  const candidatas = base.filter(b => palavra.test(normalizar(b.name)));
+  return candidatas.length === 1 ? candidatas[0].name : IGNORAR;
+}
+// A escolha feita vale para todos os dias; se a empresa escolhida não existir na base do dia, volta para a sugestão.
+function destinoDe(origem, base) {
+  const escolhido = soma.mapa[origem];
+  if (escolhido !== undefined && (escolhido === IGNORAR || escolhido === CRIAR || base.some(b => b.name === escolhido))) return escolhido;
+  return sugerirDestino(origem, base);
+}
+function linhasDaSoma(dia = null) {
+  const linhas = linhasFiltradas();
+  return dia ? linhas.filter(l => l.dia === dia) : linhas;
+}
+function origensDaSoma(dia = null) {
+  const grupos = new Map();
+  for (const l of linhasDaSoma(dia)) {
+    const k = chave(l[estado.colunaGrupo]);
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(l);
+  }
+  return [...grupos]
+    .map(([k, linhas]) => ({ chave: k, rotulo: rotuloChave(k, estado.colunaGrupo), linhas: linhas.length, centavos: Math.round(somar(linhas, estado.colunaSoma) * 100) }))
+    .sort((a, b) => b.centavos - a.centavos);
+}
+function calcularSoma(origens, base) {
+  const saida = base.map(b => ({ ...b }));
+  const somados = new Map();
+  let ignorado = 0;
+  for (const o of origens) {
+    const destino = destinoDe(o.chave, base);
+    if (destino === IGNORAR) { ignorado += o.centavos; continue; }
+    const nome = destino === CRIAR ? o.rotulo : destino;
+    if (destino === CRIAR && !saida.some(b => b.name === nome)) saida.push({ value: 0, name: nome, occupied: 0 });
+    somados.set(nome, (somados.get(nome) || 0) + o.centavos);
+  }
+  // Só "value" muda; as outras chaves, como "occupied", ficam como estão na base.
+  for (const b of saida) {
+    if (somados.has(b.name)) b.value = (Math.round(b.value * 100) + somados.get(b.name)) / 100;
+  }
+  return { saida, somados, ignorado };
+}
+async function salvarJson(nome, dados) {
+  return api("/api/salvar", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nome, dados, versao: null, forcar: true }),
+  });
+}
+
+/* base única */
+function nomeSaidaPadrao() {
+  return soma.baseNome === COLAR ? "base_somada.json" : soma.baseNome.replace(/\.json$/i, "_somado.json");
+}
+async function carregarBases() {
+  const { arquivos } = await api("/api/arquivos");
+  const bases = [];
+  for (const nome of arquivos) {
+    const r = await api(`/api/arquivo?nome=${encodeURIComponent(nome)}`).catch(() => null);
+    if (r && ehBase(r.dados)) bases.push({ nome, dados: r.dados });
+  }
+  soma.bases = bases;
+}
+function escolherBase(nome) {
+  soma.baseNome = nome;
+  soma.mapa = {};
+  soma.erroBase = "";
+  soma.historico = null;
+  if (nome === COLAR) interpretarColado();
+  else soma.base = soma.bases.find(b => b.nome === nome).dados;
+  soma.nomeSaida = nomeSaidaPadrao();
+}
+function interpretarJsonDeBase(texto) {
+  try {
+    const dados = JSON.parse(texto);
+    return ehBase(dados) ? { dados } : { erro: "O JSON precisa ser uma lista com \"name\" e \"value\" em cada item." };
+  } catch (erro) {
+    return { erro: `JSON inválido: ${erro.message}` };
+  }
+}
+function interpretarColado() {
+  soma.base = null;
+  soma.erroBase = "";
+  if (!soma.colado.trim()) return;
+  const { dados, erro } = interpretarJsonDeBase(soma.colado);
+  soma.base = dados || null;
+  soma.erroBase = erro || "";
+}
+
+/* base por dia */
+const diaDoArquivo = nome => nome.match(/(\d{4}-\d{2}-\d{2})\.json$/)?.[1];
+async function carregarDias() {
+  const lerArea = async area => {
+    const { arquivos } = await api(`/api/arquivos?area=${area}`);
+    const porDia = {};
+    for (const nome of arquivos) {
+      const dia = diaDoArquivo(nome);
+      const r = dia && await api(`/api/arquivo?nome=${encodeURIComponent(nome)}`).catch(() => null);
+      if (r && ehBase(r.dados)) porDia[dia] = r.dados;
+    }
+    return porDia;
+  };
+  [soma.basesDia, soma.resultadosDia] = await Promise.all([lerArea(AREA_BASES), lerArea(AREA_RESULTADOS)]);
+}
+function diasDoPeriodo() {
+  const dias = new Set(linhasDaSoma().map(l => l.dia).filter(Boolean));
+  const f = estado.filtros.dia;
+  for (const dia of Object.keys(soma.basesDia)) {
+    if ((!f?.de || dia >= f.de) && (!f?.ate || dia <= f.ate)) dias.add(dia);
+  }
+  return [...dias].sort();
+}
+function resultadoDoDia(dia) {
+  const base = soma.basesDia[dia];
+  return base ? calcularSoma(origensDaSoma(dia), base) : null;
+}
+function escolherDia(dia) {
+  soma.dia = dia;
+  soma.coladoDia = "";
+  soma.erroDia = "";
+  soma.trocandoBase = false;
+  soma.historico = null;
+}
+async function guardarBaseDoDia() {
+  const dia = soma.dia;
+  const { dados, erro } = interpretarJsonDeBase(soma.coladoDia);
+  if (erro) { soma.erroDia = soma.coladoDia.trim() ? erro : "Cole o JSON da base antes de guardar."; desenharSoma(); return; }
+  if (soma.basesDia[dia] && !confirm(`Substituir a base do dia ${formatarDia(dia)}? A atual fica guardada no histórico.`)) return;
+  try {
+    await salvarJson(nomeBaseDia(dia), dados);
+    soma.basesDia[dia] = dados;
+    escolherDia(dia);
+    desenharSoma();
+    avisar(`Base do dia ${formatarDia(dia)} guardada.`);
+  } catch (erro2) {
+    avisar(erro2.message, { erro: true });
+  }
+}
+async function salvarResultadoDoDia(dia, silencioso = false) {
+  const r = resultadoDoDia(dia);
+  if (!r) return false;
+  await salvarJson(nomeResultadoDia(dia), r.saida);
+  soma.resultadosDia[dia] = r.saida;
+  if (!silencioso) avisar(`Resultado do dia ${formatarDia(dia)} salvo.`);
+  return true;
+}
+async function salvarTodosOsDias() {
+  const pendentes = diasDoPeriodo().filter(d => soma.basesDia[d] && estadoDoResultado(d) !== "salvo");
+  if (!pendentes.length) { avisar("Todos os dias com base já estão salvos."); return; }
+  if (!confirm(`Salvar o resultado de ${pendentes.length} ${pendentes.length === 1 ? "dia" : "dias"}? Resultados anteriores ficam no histórico.`)) return;
+  try {
+    for (const dia of pendentes) await salvarResultadoDoDia(dia, true);
+    avisar(`${pendentes.length} ${pendentes.length === 1 ? "resultado salvo" : "resultados salvos"}.`);
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+  desenharSoma();
+}
+function estadoDoResultado(dia) {
+  const salvo = soma.resultadosDia[dia], r = resultadoDoDia(dia);
+  if (!salvo) return "nao";
+  return r && JSON.stringify(r.saida) === JSON.stringify(salvo) ? "salvo" : "desatualizado";
+}
+
+/* SQL para o banco (tabela data_PMS) */
+function lerPreferencia(nome) {
+  try { return localStorage.getItem(`gerenciador.${nome}`) || ""; } catch { return ""; }
+}
+function gravarPreferencia(nome, valor) {
+  try { localStorage.setItem(`gerenciador.${nome}`, valor); } catch { /* sem armazenamento: só não lembra */ }
+}
+const sqlTexto = s => `'${String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+// JSON_SEARCH usa padrão do LIKE: % e _ precisam de escape para casar só o nome exato.
+const sqlPadrao = s => sqlTexto(String(s).replace(/[\\%_]/g, "\\$&"));
+const sqlDinheiro = centavos => (centavos / 100).toFixed(2);
+function valorAtualNoBanco(nome) {
+  const caminho = `REPLACE(JSON_UNQUOTE(JSON_SEARCH(\`channel_percentage\`, 'one', ${sqlPadrao(nome)})), '.name', '.value')`;
+  return `CAST(JSON_UNQUOTE(JSON_EXTRACT(\`channel_percentage\`, ${caminho})) AS DECIMAL(20,2))`;
+}
+function diasParaSql(dias) {
+  return dias.filter(d => soma.basesDia[d]).map(dia => {
+    const base = soma.basesDia[dia], { saida, somados, ignorado } = resultadoDoDia(dia);
+    return { dia, base, saida, somados, ignorado, centavos: centavosDa(saida) - centavosDa(base) };
+  });
+}
+/* Um UPDATE por dia. Ele só pega a linha se o channel_percentage do banco ainda for a base usada aqui:
+   mesmo número de empresas e mesmo valor em cada empresa que vai mudar. Depois de aplicado, esses valores
+   mudam, então rodar o script de novo não soma duas vezes (o dia fica com 0 linhas afetadas). */
+function gerarSql(itens, idHotel) {
+  const agora = new Date().toLocaleString("pt-BR");
+  const total = itens.reduce((t, i) => t + i.centavos, 0);
+  const linhas = [
+    `-- Gerado pelo gerenciador de planilhas em ${agora}`,
+    `-- Hotel ${idHotel} · ${itens.length} ${itens.length === 1 ? "dia" : "dias"} · total somado ${moeda.format(total / 100)}`,
+    "-- Cada UPDATE só altera o dia se o channel_percentage ainda for a base usada aqui.",
+    "-- Rodar de novo não soma duas vezes: o dia já atualizado fica com 0 linhas afetadas.",
+    "",
+    "START TRANSACTION;",
+    "",
+  ];
+  for (const i of itens) {
+    const partes = [...i.somados].map(([nome, c]) => `${nome || "(sem nome)"} ${c < 0 ? "-" : "+"}${moeda.format(Math.abs(c) / 100)}`);
+    linhas.push(`-- ${formatarDia(i.dia)}: ${i.centavos < 0 ? "-" : "+"}${moeda.format(Math.abs(i.centavos) / 100)}${partes.length ? ` (${partes.join("; ")})` : ""}`);
+    if (i.ignorado) linhas.push(`-- Atenção: ${moeda.format(i.ignorado / 100)} ficaram de fora (“Não somar”).`);
+    const condicoes = [
+      `\`id_hotel\` = ${idHotel}`,
+      `\`day\` = '${i.dia}'`,
+      `JSON_LENGTH(\`channel_percentage\`) = ${i.base.length}`,
+      ...[...i.somados.keys()].filter(n => i.base.some(b => b.name === n)).map(n =>
+        `${valorAtualNoBanco(n)} = ${(i.base.find(b => b.name === n).value).toFixed(2)}`),
+    ];
+    linhas.push(
+      "UPDATE `data_PMS`",
+      `SET \`channel_percentage\` = ${sqlTexto(JSON.stringify(i.saida))},`,
+      `    \`revenue\` = \`revenue\` + (${sqlDinheiro(i.centavos)}),`,
+      `    \`daily_revenue\` = \`daily_revenue\` + (${sqlDinheiro(i.centavos)})`,
+      `WHERE ${condicoes.join("\n  AND ")};`,
+      "");
+  }
+  linhas.push(
+    "COMMIT;",
+    "",
+    "-- Conferência: revenue e daily_revenue depois da atualização",
+    `SELECT \`day\`, \`revenue\`, \`daily_revenue\`, JSON_LENGTH(\`channel_percentage\`) AS empresas FROM \`data_PMS\``,
+    `WHERE \`id_hotel\` = ${idHotel} AND \`day\` IN (${itens.map(i => `'${i.dia}'`).join(", ")}) ORDER BY \`day\`;`,
+    "");
+  return linhas.join("\n");
+}
+function cartaoSql(dias) {
+  const cfg = soma.sql;
+  const comBase = dias.filter(d => soma.basesDia[d]);
+  const itens = diasParaSql(comBase.filter(d => !cfg.desmarcados.has(d)));
+  const idValido = /^\d+$/.test(cfg.idHotel.trim());
+  const limparTexto = () => { cfg.texto = ""; };
+  const cartao = el("details", { className: "cartao", id: "cartao-sql", open: cfg.aberto, ontoggle(e) { cfg.aberto = e.target.open; } },
+    el("summary", {}, el("h2", { style: "display:inline", textContent: "Gerar SQL para o banco (vários dias)" })));
+  if (!comBase.length) {
+    cartao.append(el("p", { className: "nota", textContent: "Guarde a base de pelo menos um dia para gerar o SQL." }));
+    return cartao;
+  }
+  const marcar = todos => { cfg.desmarcados = todos ? new Set() : new Set(comBase); limparTexto(); desenharSoma(); };
+  const lista = el("div", { className: "dias-sql" }, ...comBase.map(dia => {
+    const r = resultadoDoDia(dia), c = centavosDa(r.saida) - centavosDa(soma.basesDia[dia]);
+    return el("label", {},
+      el("input", { type: "checkbox", checked: !cfg.desmarcados.has(dia), onchange(e) {
+        e.target.checked ? cfg.desmarcados.delete(dia) : cfg.desmarcados.add(dia); limparTexto(); desenharSoma();
+      } }),
+      el("span", { textContent: `${formatarDia(dia)} ` }), el("small", { textContent: `+${moeda.format(c / 100)}` }));
+  }));
+  const naoSalvos = itens.filter(i => estadoDoResultado(i.dia) !== "salvo").map(i => formatarDia(i.dia));
+  const total = itens.reduce((t, i) => t + i.centavos, 0);
+  cartao.append(
+    el("div", { className: "campos", style: "margin-top:10px" },
+      el("label", {}, el("span", { className: "rotulo", textContent: "ID do hotel (id_hotel)" }),
+        el("input", { type: "text", inputMode: "numeric", id: "sql-hotel", value: cfg.idHotel, style: "width:120px", oninput(e) {
+          cfg.idHotel = e.target.value; gravarPreferencia("idHotel", cfg.idHotel.trim()); limparTexto();
+          $("sql-gerar").disabled = !/^\d+$/.test(cfg.idHotel.trim()) || !itens.length;
+        } })),
+      el("button", { textContent: "Marcar todos", onclick() { marcar(true); } }),
+      el("button", { textContent: "Desmarcar todos", onclick() { marcar(false); } })),
+    lista,
+    el("p", { className: "nota", textContent: `${itens.length} ${itens.length === 1 ? "dia marcado" : "dias marcados"} · total a somar ${moeda.format(total / 100)} em channel_percentage, revenue e daily_revenue.` }));
+  if (naoSalvos.length) {
+    cartao.append(el("p", { className: "alerta", textContent: `O SQL usa a prévia atual. Estes dias não estão salvos ou estão diferentes do salvo: ${naoSalvos.join(", ")}.` }));
+  }
+  cartao.append(el("div", { className: "salvar-como", style: "margin-top:10px" },
+    el("button", { className: "primario", id: "sql-gerar", textContent: "Gerar SQL", disabled: !idValido || !itens.length, onclick() {
+      cfg.texto = gerarSql(itens, cfg.idHotel.trim()); desenharSoma();
+    } })));
+  if (cfg.texto) {
+    const nomeArquivo = `update_data_PMS_hotel${cfg.idHotel.trim()}_${itens[0].dia}_a_${itens.at(-1).dia}.sql`;
+    cartao.append(
+      el("textarea", { id: "sql-texto", readOnly: true, value: cfg.texto, ariaLabel: "SQL gerado", style: "min-height:260px" }),
+      el("div", { className: "salvar-como", style: "margin-top:8px" },
+        el("button", { id: "sql-copiar", textContent: "Copiar SQL", async onclick() {
+          try { await navigator.clipboard.writeText(cfg.texto); avisar("SQL copiado."); }
+          catch { avisar("Não foi possível copiar. Use “Baixar .sql”.", { erro: true }); }
+        } }),
+        el("button", { id: "sql-baixar", textContent: "Baixar .sql", onclick() {
+          const url = URL.createObjectURL(new Blob([cfg.texto], { type: "application/sql" }));
+          el("a", { href: url, download: nomeArquivo }).click();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        } })),
+      el("p", { className: "nota", textContent: "Antes de rodar, confira que o backup do banco está feito. Cada UPDATE deve afetar 1 linha; 0 linhas quer dizer que o dia já foi atualizado ou mudou no banco." }));
+  }
+  return cartao;
+}
+
+/* histórico */
+async function abrirHistorico(nome) {
+  try {
+    const { versoes } = await api(`/api/historico?nome=${encodeURIComponent(nome)}`);
+    soma.historico = { nome, versoes };
+    desenharSoma();
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+}
+async function restaurarVersao(nome, versao) {
+  if (!confirm(`Voltar “${nome}” para a versão de ${versao.quando}?\n\nA versão atual também fica guardada no histórico.`)) return;
+  try {
+    const { dados } = await api("/api/restaurar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, id: versao.id }),
+    });
+    const dia = diaDoArquivo(nome);
+    if (nome.startsWith(`${AREA_BASES}/`)) soma.basesDia[dia] = dados;
+    else if (nome.startsWith(`${AREA_RESULTADOS}/`)) soma.resultadosDia[dia] = dados;
+    else await carregarBases().then(() => { if (soma.baseNome === nome) soma.base = dados; });
+    await abrirHistorico(nome);
+    avisar("Versão restaurada.");
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+}
+function quandoDoBackup(id) {
+  const [d, h] = id.replace(".json", "").split("_");
+  return `${formatarDia(d)} às ${h.split("-").slice(0, 3).join(":")}`;
+}
+function painelHistorico(nome) {
+  if (soma.historico?.nome !== nome) return [];
+  const versoes = soma.historico.versoes.map(v => ({ ...v, quando: quandoDoBackup(v.id) }));
+  const fechar = el("button", { textContent: "Fechar histórico", onclick() { soma.historico = null; desenharSoma(); } });
+  if (!versoes.length) {
+    return [el("div", { className: "historico" },
+      el("p", { className: "nota", textContent: "Ainda não há versões anteriores. Sempre que este arquivo for substituído, a versão antiga aparece aqui." }), fechar)];
+  }
+  return [el("div", { className: "historico" },
+    el("table", { className: "tabela-historico" },
+      el("thead", {}, el("tr", {}, ...["Guardada em", "Empresas", "Total", ""].map((t, i) => el("th", { textContent: t, className: i === 1 || i === 2 ? "num" : "" })))),
+      el("tbody", {}, ...versoes.map(v => el("tr", {},
+        celula(v.quando),
+        celula(v.itens ?? "", "num"),
+        celula(v.total === null || v.total === undefined ? "" : moeda.format(v.total), "num"),
+        el("td", {}, el("button", { textContent: "Restaurar", onclick() { restaurarVersao(nome, v); } })))))),
+    fechar)];
+}
+
+/* tela */
+async function abrirSoma() {
+  fecharPopover();
+  // Redesenha já, para a prévia anterior não aparecer com os filtros antigos enquanto carrega.
+  if (soma.base || soma.dia) desenharSoma();
+  $("soma").hidden = false;
+  try {
+    await Promise.all([carregarBases(), carregarDias()]);
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+  if (soma.baseNome === COLAR) interpretarColado();
+  else if (soma.bases.some(b => b.nome === soma.baseNome)) soma.base = soma.bases.find(b => b.nome === soma.baseNome).dados;
+  else escolherBase(soma.bases[0]?.nome ?? COLAR);
+  desenharSoma();
+}
+function celula(texto, classe = "") { return el("td", { textContent: texto, className: classe }); }
+function desenharSoma() {
+  if (soma.modo === "dia" && !modoDiaria()) soma.modo = "unica";
+  const botaoModo = (modo, texto) => el("button", {
+    textContent: texto, ariaPressed: String(soma.modo === modo),
+    disabled: modo === "dia" && !modoDiaria(),
+    title: modo === "dia" && !modoDiaria() ? "Ligue “Dividir receita por diária” na tela principal" : "",
+    onclick() { soma.modo = modo; soma.historico = null; desenharSoma(); },
+  });
+  const blocos = [el("div", { className: "alternador", role: "group", ariaLabel: "Tipo de base" },
+    botaoModo("unica", "Uma base só"), botaoModo("dia", "Uma base por dia"))];
+  if (!modoDiaria()) {
+    blocos.push(el("p", { className: "nota", textContent: "Para usar uma base por dia, ligue “Dividir receita por diária” na tela principal." }));
+  }
+  if (soma.modo === "dia") desenharSomaPorDia(blocos);
+  else desenharSomaUnica(blocos);
+  $("soma-conteudo").replaceChildren(...blocos);
+}
+function desenharSomaUnica(blocos) {
+  const todas = linhasDaAba().length, usadas = linhasFiltradas().length;
+  const seletorBase = el("select", {
+    id: "soma-base", ariaLabel: "Base",
+    onchange(e) { escolherBase(e.target.value); desenharSoma(); },
+  }, ...soma.bases.map(b => el("option", { value: b.nome, textContent: b.nome })), el("option", { value: COLAR, textContent: "Colar JSON…" }));
+  seletorBase.value = soma.baseNome;
+  const linhaBase = el("div", { className: "campos" }, seletorBase);
+  if (soma.baseNome !== COLAR) {
+    linhaBase.append(el("button", { textContent: "Histórico", onclick() { abrirHistorico(soma.baseNome); } }));
+  }
+  const cartaoBase = el("div", { className: "cartao" }, el("h2", { textContent: "1. Base que vai receber os valores" }), linhaBase,
+    ...painelHistorico(soma.baseNome));
+  if (soma.baseNome === COLAR) {
+    cartaoBase.append(el("textarea", {
+      id: "soma-colado", placeholder: '[{"value":100,"name":"EMPRESA","occupied":1}]', value: soma.colado, ariaLabel: "JSON da base",
+      onchange(e) { soma.colado = e.target.value; soma.mapa = {}; interpretarColado(); desenharSoma(); },
+    }));
+  }
+  if (soma.erroBase) cartaoBase.append(el("p", { className: "alerta", textContent: soma.erroBase }));
+  if (/_som(ado|ada)\.json$/i.test(soma.baseNome)) {
+    cartaoBase.append(el("p", { className: "alerta", textContent: "Esta base já parece ser um resultado somado. Somar de novo pode contar os valores duas vezes." }));
+  }
+  blocos.push(cartaoBase);
+  if (!soma.base) return;
+
+  desenharCalculo(blocos, {
+    base: soma.base, origens: origensDaSoma(), numero: 2,
+    descricao: descreverOrigem(usadas, todas), filtrado: usadas < todas,
+    salvar(saida, exportar) {
+      const nome = el("input", {
+        type: "text", id: "soma-nome", value: soma.nomeSaida, ariaLabel: "Nome do arquivo",
+        oninput(e) { soma.nomeSaida = e.target.value; },
+      });
+      return [
+        el("div", { className: "salvar-como" }, nome,
+          el("button", { className: "primario", id: "soma-salvar", textContent: "Salvar arquivo", onclick() { salvarSoma(saida); } }),
+          el("button", { id: "soma-excel", textContent: "Exportar para Excel", onclick() { exportar((soma.nomeSaida.trim() || "base_somada").replace(/\.json$/i, "")); } }),
+          el("button", { id: "soma-copiar", textContent: "Copiar JSON", onclick() { copiarSoma(saida); } })),
+        el("p", { className: "nota", textContent: "A base original não é alterada: o resultado vai para este arquivo novo." }),
+      ];
+    },
+  });
+}
+function desenharSomaPorDia(blocos) {
+  const dias = diasDoPeriodo();
+  if (!dias.length) {
+    blocos.push(el("div", { className: "cartao" }, el("p", { className: "nota", textContent: "Nenhuma diária no período escolhido." })));
+    return;
+  }
+  if (!dias.includes(soma.dia)) escolherDia(dias.find(d => !soma.basesDia[d]) || dias[0]);
+
+  // 1. Visão geral dos dias
+  const corpo = el("tbody");
+  let comBase = 0, salvos = 0;
+  for (const dia of dias) {
+    const base = soma.basesDia[dia], r = resultadoDoDia(dia), situacao = estadoDoResultado(dia);
+    const receita = origensDaSoma(dia).reduce((t, o) => t + o.centavos, 0);
+    if (base) comBase++;
+    if (situacao === "salvo") salvos++;
+    const textoResultado = { nao: base ? "Não salvo" : "—", salvo: "Salvo", desatualizado: "Desatualizado" }[situacao];
+    corpo.append(el("tr", { className: dia === soma.dia ? "selecionada" : "" },
+      el("td", {}, el("button", { className: "link-dia", textContent: formatarDia(dia), onclick() { escolherDia(dia); desenharSoma(); } })),
+      celula(moeda.format(receita / 100), "num"),
+      celula(base ? moeda.format(centavosDa(base) / 100) : "Falta colar", base ? "num" : "num falta"),
+      celula(r ? moeda.format(centavosDa(r.saida) / 100) : "", "num"),
+      celula(textoResultado, situacao === "desatualizado" ? "falta" : "")));
+  }
+  blocos.push(el("div", { className: "cartao" },
+    el("h2", { textContent: "1. Dias do período" }),
+    el("table", { id: "tabela-dias" },
+      el("thead", {}, el("tr", {}, ...["Dia", "Receita do dia", "Base do dia", "Novo total", "Resultado"].map((t, i) => el("th", { textContent: t, className: i && i < 4 ? "num" : "" })))),
+      corpo),
+    el("div", { className: "salvar-como", style: "margin-top:10px" },
+      el("span", { className: "nota", style: "margin:0;flex:1", textContent: `${comBase} de ${dias.length} dias com base · ${salvos} resultados salvos e em dia` }),
+      el("button", { id: "salvar-todos", textContent: "Salvar todos os dias com base", disabled: !comBase, onclick: salvarTodosOsDias }))));
+  blocos.push(cartaoSql(dias));
+
+  // 2. Base do dia escolhido
+  const dia = soma.dia, base = soma.basesDia[dia];
+  const cartaoBase = el("div", { className: "cartao", id: "cartao-base-dia" }, el("h2", { textContent: `2. Base do dia ${formatarDia(dia)}` }));
+  if (base && !soma.trocandoBase) {
+    cartaoBase.append(el("div", { className: "salvar-como" },
+      el("span", { style: "flex:1", textContent: `${base.length} empresas · total ${moeda.format(centavosDa(base) / 100)}` }),
+      el("button", { textContent: "Substituir base", onclick() { soma.trocandoBase = true; desenharSoma(); } }),
+      el("button", { textContent: "Histórico", onclick() { abrirHistorico(nomeBaseDia(dia)); } })),
+      ...painelHistorico(nomeBaseDia(dia)));
+  } else {
+    cartaoBase.append(
+      el("textarea", {
+        id: "colar-dia", ariaLabel: `JSON da base do dia ${formatarDia(dia)}`,
+        placeholder: `Cole aqui a base do dia ${formatarDia(dia)}: [{"value":100,"name":"EMPRESA","occupied":1}, …]`,
+        value: soma.coladoDia, oninput(e) { soma.coladoDia = e.target.value; },
+      }),
+      el("div", { className: "salvar-como", style: "margin-top:8px" },
+        el("button", { className: "primario", id: "guardar-base-dia", textContent: "Guardar base do dia", onclick: guardarBaseDoDia }),
+        ...(base ? [el("button", { textContent: "Cancelar", onclick() { soma.trocandoBase = false; soma.erroDia = ""; desenharSoma(); } })] : []),
+        el("button", { textContent: "Histórico", onclick() { abrirHistorico(nomeBaseDia(dia)); } })),
+      ...painelHistorico(nomeBaseDia(dia)));
+    if (soma.erroDia) cartaoBase.append(el("p", { className: "alerta", textContent: soma.erroDia }));
+  }
+  blocos.push(cartaoBase);
+  if (!base) return;
+
+  const usadas = linhasDaSoma(dia).length, todas = linhasDaAba().length;
+  desenharCalculo(blocos, {
+    base, origens: origensDaSoma(dia), numero: 3,
+    descricao: `${descreverOrigem(usadas, todas)}, dia ${formatarDia(dia)}`, filtrado: false,
+    salvar(saida, exportar) {
+      const situacao = estadoDoResultado(dia);
+      return [
+        el("div", { className: "salvar-como" },
+          el("span", { style: "flex:1", textContent: `Arquivo: ${nomeResultadoDia(dia)}` + (situacao === "salvo" ? " (salvo)" : situacao === "desatualizado" ? " (o salvo está diferente desta prévia)" : "") }),
+          el("button", { className: "primario", id: "salvar-dia", textContent: "Salvar resultado do dia", async onclick() {
+            try { await salvarResultadoDoDia(dia); desenharSoma(); } catch (erro) { avisar(erro.message, { erro: true }); }
+          } }),
+          el("button", { id: "soma-excel", textContent: "Exportar para Excel", onclick() { exportar(`resultado_${dia}`); } }),
+          el("button", { id: "soma-copiar", textContent: "Copiar JSON", onclick() { copiarSoma(saida); } }),
+          el("button", { textContent: "Histórico", onclick() { abrirHistorico(nomeResultadoDia(dia)); } })),
+        ...painelHistorico(nomeResultadoDia(dia)),
+        el("p", { className: "nota", textContent: "A base do dia não é alterada: o resultado vai para a pasta resultados_por_dia." }),
+      ];
+    },
+  });
+}
+// De-para, prévia e o cartão de saída, iguais para base única e base por dia.
+function desenharCalculo(blocos, { base, origens, numero, descricao, filtrado, salvar }) {
+  const { saida, somados, ignorado } = calcularSoma(origens, base);
+  const seletorGrupo = el("select", {
+    ariaLabel: "Coluna com a empresa",
+    onchange(e) { estado.colunaGrupo = e.target.value; soma.mapa = {}; desenharGrupos(); desenharSoma(); },
+  }, ...estado.colunas.filter(c => estado.tipos[c] === "texto").map(c => el("option", { value: c, textContent: rotuloColuna(c) })));
+  seletorGrupo.value = estado.colunaGrupo;
+  const corpoMapa = el("tbody");
+  for (const o of origens) {
+    const seletor = el("select", {
+      ariaLabel: `Destino de ${o.rotulo}`,
+      onchange(e) { soma.mapa[o.chave] = e.target.value; desenharSoma(); },
+    }, el("option", { value: IGNORAR, textContent: "Não somar" }),
+       el("option", { value: CRIAR, textContent: "Criar nova empresa" }),
+       ...base.map(b => el("option", { value: b.name, textContent: b.name })));
+    seletor.value = destinoDe(o.chave, base);
+    corpoMapa.append(el("tr", {}, celula(o.rotulo), celula(String(o.linhas), "num"), celula(moeda.format(o.centavos / 100), "num"), el("td", {}, seletor)));
+  }
+  blocos.push(el("div", { className: "cartao" },
+    el("h2", { textContent: `${numero}. Qual empresa recebe cada valor` }),
+    el("div", { className: "campos" }, el("label", {}, el("span", { className: "rotulo", textContent: "Coluna da empresa" }), seletorGrupo)),
+    origens.length
+      ? el("table", { style: "margin-top:10px" },
+          el("thead", {}, el("tr", {}, ...["Na planilha", modoDiaria() ? "Diárias" : "Linhas", "A somar", "Somar em"].map((t, i) => el("th", { textContent: t, className: i === 1 || i === 2 ? "num" : "" })))),
+          corpoMapa)
+      : el("p", { className: "nota", textContent: "Nenhuma receita para somar aqui: a base fica como está." }),
+    el("p", { className: "nota", textContent: `Usando ${descricao}.${filtrado ? " Os filtros da tela estão valendo." : ""}` })));
+
+  const atual = centavosDa(base), novo = centavosDa(saida), aSomar = novo - atual;
+  const valorBase = new Map(base.map(b => [b.name, b.value]));
+  const ordenadas = [...saida].sort((a, b) => (somados.has(b.name) - somados.has(a.name)) || b.value - a.value);
+  const corpoPrevia = el("tbody");
+  for (const b of ordenadas) {
+    const somado = somados.get(b.name);
+    corpoPrevia.append(el("tr", { className: somado !== undefined ? "alterada" : "" },
+      celula(b.name),
+      celula(moeda.format(valorBase.get(b.name) ?? 0), "num"),
+      celula(somado !== undefined ? `+ ${moeda.format(somado / 100)}` : "", "num"),
+      celula(moeda.format(b.value), "num"),
+      celula(b.occupied ?? "", "num")));
+  }
+  const cartaoPrevia = el("div", { className: "cartao" },
+    el("h2", { textContent: `${numero + 1}. Prévia do resultado` }),
+    el("div", { className: "numeros" },
+      el("div", {}, el("span", { className: "rotulo", textContent: "Novo total" }), el("div", { className: "novo-total", id: "soma-novo", textContent: moeda.format(novo / 100) })),
+      el("div", {}, el("span", { className: "rotulo", textContent: "Total da base" }), el("span", { className: "medida", id: "soma-atual", textContent: moeda.format(atual / 100) })),
+      el("div", {}, el("span", { className: "rotulo", textContent: "Somado agora" }), el("span", { className: "medida", id: "soma-somado", textContent: moeda.format(aSomar / 100) }))));
+  if (ignorado) {
+    cartaoPrevia.append(el("p", { className: "alerta", id: "soma-ignorado", textContent: `${moeda.format(ignorado / 100)} ficaram de fora porque estão como “Não somar”.` }));
+  }
+  cartaoPrevia.append(el("table", { style: "margin-top:12px", id: "soma-previa" },
+    el("thead", {}, el("tr", {}, ...["Empresa", "Atual", "Somado", "Novo valor", "Occupied"].map((t, i) => el("th", { textContent: t, className: i ? "num" : "" })))),
+    corpoPrevia,
+    el("tfoot", {}, el("tr", {}, celula("Total"), celula(moeda.format(atual / 100), "num"), celula(`+ ${moeda.format(aSomar / 100)}`, "num"), celula(moeda.format(novo / 100), "num"), celula("")))));
+  blocos.push(cartaoPrevia);
+
+  const exportar = nomeArquivo => exportarExcel(ordenadas.map(b => ({
+    empresa: b.name,
+    atual: valorBase.get(b.name) ?? 0,
+    somado: somados.has(b.name) ? somados.get(b.name) / 100 : null,
+    occupied: typeof b.occupied === "number" ? b.occupied : null,
+  })), `Somado a partir de ${descricao}.`, nomeArquivo);
+  blocos.push(el("div", { className: "cartao" }, el("h2", { textContent: `${numero + 2}. Guardar o resultado` }), ...salvar(saida, exportar)));
+}
+async function salvarSoma(saida, forcar = false) {
+  let nome = soma.nomeSaida.trim();
+  if (!nome) { avisar("Informe o nome do arquivo.", { erro: true }); return; }
+  if (!/\.json$/i.test(nome)) nome += ".json";
+  try {
+    await api("/api/salvar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, dados: saida, versao: null, forcar }),
+    });
+    await listarArquivos(estado.arquivo);
+    await carregarBases();
+    desenharSoma();
+    avisar(`Resultado salvo em “${nome}”.`);
+  } catch (erro) {
+    if (erro.status === 409) {
+      if (confirm(`“${nome}” já existe. Substituir? A versão atual fica guardada no histórico.`)) return salvarSoma(saida, true);
+      return;
+    }
+    avisar(erro.message, { erro: true });
+  }
+}
+async function exportarExcel(linhas, nota, nomeArquivo) {
+  try {
+    const resposta = await fetch("/api/exportar-xlsx", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ linhas, nota }),
+    });
+    if (!resposta.ok) {
+      const corpo = await resposta.json().catch(() => ({}));
+      throw new Error(corpo.erro || `Erro ${resposta.status}`);
+    }
+    const url = URL.createObjectURL(await resposta.blob());
+    const nome = `${nomeArquivo}.xlsx`;
+    el("a", { href: url, download: nome }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    avisar(`Planilha “${nome}” enviada para os downloads.`);
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+}
+async function copiarSoma(saida) {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(saida));
+    avisar("JSON copiado.");
+  } catch {
+    avisar("Não foi possível copiar. Use o botão de salvar.", { erro: true });
+  }
+}
+
+/* ---------- arquivos ---------- */
+function carregarDados(dados) {
+  const valido = rows => Array.isArray(rows) && rows.every(r => r && typeof r === "object" && !Array.isArray(r));
+  if (valido(dados)) {
+    estado.abas = { "": dados }; estado.multiplasAbas = false;
+  } else if (dados && typeof dados === "object" && !Array.isArray(dados) && Object.values(dados).every(valido)) {
+    estado.abas = dados; estado.multiplasAbas = true;
+  } else {
+    throw new Error("Este JSON não é uma lista de registros, então não dá para abrir como tabela.");
+  }
+  selecionarAba(Object.keys(estado.abas)[0]);
+}
+function selecionarAba(aba) {
+  estado.aba = aba;
+  estado.filtros = {}; estado.ordem = null; estado.soProblemas = false;
+  fecharPopover();
+  analisarColunas();
+  const seletor = $("aba");
+  seletor.hidden = !estado.multiplasAbas;
+  seletor.replaceChildren(...Object.keys(estado.abas).map(n => el("option", { value: n, textContent: n })));
+  seletor.value = aba ?? "";
+  desenhar();
+}
+async function listarArquivos(selecionado) {
+  const { arquivos } = await api("/api/arquivos");
+  const lista = selecionado && !arquivos.includes(selecionado) ? [selecionado, ...arquivos] : arquivos;
+  $("arquivo").replaceChildren(...lista.map(n => el("option", { value: n, textContent: n })));
+  if (selecionado) $("arquivo").value = selecionado;
+  return lista;
+}
+async function abrirArquivo(nome) {
+  try {
+    const { dados, versao } = await api(`/api/arquivo?nome=${encodeURIComponent(nome)}`);
+    carregarDados(dados);
+    estado.arquivo = nome; estado.versao = versao; estado.pendente = false;
+    desenhar();
+  } catch (erro) {
+    $("arquivo").value = estado.arquivo ?? "";
+    avisar(erro.message, { erro: true });
+  }
+}
+async function salvar(forcar = false) {
+  if (!estado.arquivo || !estado.pendente) return;
+  const dados = estado.multiplasAbas ? estado.abas : estado.abas[""];
+  try {
+    const { versao } = await api("/api/salvar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: estado.arquivo, dados, versao: estado.versao, forcar }),
+    });
+    estado.versao = versao; estado.pendente = false;
+    await listarArquivos(estado.arquivo);
+    desenharResumo();
+    avisar("Salvo. A versão anterior ficou guardada no histórico (pasta backups).");
+  } catch (erro) {
+    if (erro.status === 409 && confirm(`“${estado.arquivo}” já existe ou mudou no disco desde que foi aberto.\n\nSubstituir pelo que está na tela? A versão do disco fica guardada no histórico (pasta backups).`)) {
+      return salvar(true);
+    }
+    if (erro.status !== 409) avisar(erro.message, { erro: true });
+  }
+}
+async function importar(arquivo) {
+  try {
+    const { dados, nome } = await api(`/api/importar?nome=${encodeURIComponent(arquivo.name)}`, {
+      method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: arquivo,
+    });
+    carregarDados(dados);
+    estado.arquivo = nome; estado.versao = null; estado.pendente = true;
+    await listarArquivos(nome);
+    desenhar();
+    avisar(`Planilha importada. Clique em Salvar para gravar “${nome}”.`);
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+}
+const podeDescartar = () => !estado.pendente || confirm("Há alterações não salvas. Descartar?");
+
+/* ---------- eventos ---------- */
+$("arquivo").onchange = e => {
+  if (!podeDescartar()) { e.target.value = estado.arquivo; return; }
+  abrirArquivo(e.target.value);
+};
+$("aba").onchange = e => selecionarAba(e.target.value);
+$("coluna-soma").onchange = e => { estado.colunaSoma = e.target.value; analisarColunas(); desenhar(); };
+$("por-diaria").onchange = e => alternarDiaria(e.target.checked);
+$("periodo").onchange = e => {
+  const mes = e.target.value;
+  if (mes === "personalizado") return;
+  if (mes) estado.filtros.dia = { excluidos: new Set(), ...intervaloDoMes(mes) };
+  else delete estado.filtros.dia;
+  fecharPopover();
+  desenhar();
+};
+$("salvar").onclick = () => salvar();
+$("nova-linha").onclick = novaLinha;
+$("abrir-soma").onclick = abrirSoma;
+$("fechar-soma").onclick = () => { $("soma").hidden = true; };
+$("importar").onclick = () => { if (podeDescartar()) $("importar-arquivo").click(); };
+$("importar-arquivo").onchange = e => {
+  const arquivo = e.target.files[0];
+  e.target.value = "";
+  if (arquivo) importar(arquivo);
+};
+document.addEventListener("click", e => {
+  // composedPath: o clique pode ter redesenhado o popover e removido o próprio alvo.
+  if (!$("popover").hidden && !e.composedPath().includes($("popover"))) fecharPopover();
+});
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); document.activeElement?.blur(); salvar(); }
+  if (e.key === "Escape") fecharPopover();
+});
+window.addEventListener("beforeunload", e => { if (estado.pendente) e.preventDefault(); });
+
+(async () => {
+  try {
+    const arquivos = await listarArquivos();
+    if (arquivos.length) await abrirArquivo(arquivos[0]);
+    else desenhar();
+  } catch (erro) {
+    avisar(erro.message, { erro: true });
+  }
+})();
+</script>
+</body>
+</html>
